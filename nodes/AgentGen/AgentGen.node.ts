@@ -389,26 +389,32 @@ export class AgentGen implements INodeType {
 
 					const filename = filenameOverride || binaryData.fileName || 'upload';
 
-					const options: IHttpRequestOptions = {
-						method: 'POST' as IHttpRequestMethods,
-						url: `${BASE_URL}/v1/upload/temp`,
-						body: {
-							file: {
-								value: binaryDataBuffer,
-								options: {
-									filename,
-									contentType: binaryData.mimeType,
-								},
-							},
-						},
-						json: true,
-					};
+					// httpRequestWithAuthentication has no multipart mode — json:true would
+					// force application/json and trigger a 415. Use native fetch + FormData
+					// so the browser/Node sets the correct multipart/form-data Content-Type.
+					const credentials = await this.getCredentials('agentGenApi');
+					const formData = new FormData();
+					formData.append(
+						'file',
+						new Blob([binaryDataBuffer], { type: binaryData.mimeType }),
+						filename,
+					);
 
-					responseData = (await this.helpers.httpRequestWithAuthentication.call(
-						this,
-						'agentGenApi',
-						options,
-					)) as IDataObject;
+					const res = await fetch(`${BASE_URL}/v1/upload/temp`, {
+						method: 'POST',
+						headers: { 'X-API-Key': credentials.apiKey as string },
+						body: formData,
+					});
+
+					const json = (await res.json()) as IDataObject;
+					if (!res.ok) {
+						throw new NodeOperationError(
+							this.getNode(),
+							(json.error as string) ?? `Upload failed with status ${res.status}`,
+							{ itemIndex: i },
+						);
+					}
+					responseData = json;
 				}
 
 				// ── Get Balance ───────────────────────────────────────────────────────

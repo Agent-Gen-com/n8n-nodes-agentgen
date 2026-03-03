@@ -265,6 +265,7 @@ class AgentGen {
         };
     }
     async execute() {
+        var _a;
         const items = this.getInputData();
         const returnData = [];
         for (let i = 0; i < items.length; i++) {
@@ -351,21 +352,22 @@ class AgentGen {
                     const binaryData = this.helpers.assertBinaryData(i, binaryPropertyName);
                     const binaryDataBuffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
                     const filename = filenameOverride || binaryData.fileName || 'upload';
-                    const options = {
+                    // httpRequestWithAuthentication has no multipart mode — json:true would
+                    // force application/json and trigger a 415. Use native fetch + FormData
+                    // so the browser/Node sets the correct multipart/form-data Content-Type.
+                    const credentials = await this.getCredentials('agentGenApi');
+                    const formData = new FormData();
+                    formData.append('file', new Blob([binaryDataBuffer], { type: binaryData.mimeType }), filename);
+                    const res = await fetch(`${BASE_URL}/v1/upload/temp`, {
                         method: 'POST',
-                        url: `${BASE_URL}/v1/upload/temp`,
-                        body: {
-                            file: {
-                                value: binaryDataBuffer,
-                                options: {
-                                    filename,
-                                    contentType: binaryData.mimeType,
-                                },
-                            },
-                        },
-                        json: true,
-                    };
-                    responseData = (await this.helpers.httpRequestWithAuthentication.call(this, 'agentGenApi', options));
+                        headers: { 'X-API-Key': credentials.apiKey },
+                        body: formData,
+                    });
+                    const json = (await res.json());
+                    if (!res.ok) {
+                        throw new n8n_workflow_1.NodeOperationError(this.getNode(), (_a = json.error) !== null && _a !== void 0 ? _a : `Upload failed with status ${res.status}`, { itemIndex: i });
+                    }
+                    responseData = json;
                 }
                 // ── Get Balance ───────────────────────────────────────────────────────
                 else if (operation === 'getBalance') {
