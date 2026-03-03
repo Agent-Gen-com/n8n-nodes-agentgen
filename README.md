@@ -10,6 +10,12 @@ Send an HTML string, get back a publicly accessible URL pointing to a rendered P
 
 ---
 
+## Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/4f9ebaf8056449008d9e576b9389a1cc-with-play.gif)](https://www.loom.com/share/4f9ebaf8056449008d9e576b9389a1cc)
+
+---
+
 ## Installation (after n8n approval)
 
 Once the package is listed in the n8n community registry, install it directly from the n8n UI:
