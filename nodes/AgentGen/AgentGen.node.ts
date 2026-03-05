@@ -64,6 +64,18 @@ export class AgentGen implements INodeType {
 							'Upload a file for use inside HTML templates. Free — auto-deleted after 24 hours.',
 						action: 'Upload a temporary file',
 					},
+					{
+						name: 'Create Origin',
+						value: 'createOrigin',
+						description: 'Provision a new public origin subdomain (<id>.agent-gen.com) for hosting files. Free.',
+						action: 'Create a public origin subdomain',
+					},
+					{
+						name: 'Upload Origin Public Key',
+						value: 'uploadOriginPublicKey',
+						description: 'Upload an EC public key (PEM) to an origin subdomain (e.g. for Tesla virtual key setup). Free.',
+						action: 'Upload public key to origin',
+					},
 				],
 				default: 'generateImage',
 			},
@@ -276,6 +288,31 @@ export class AgentGen implements INodeType {
 				description:
 					'Override the filename sent to the API. Defaults to the filename from the binary data.',
 			},
+			// ─── Upload Origin Public Key ────────────────────────────────────────────
+			{
+				displayName: 'Origin ID',
+				name: 'originId',
+				type: 'string',
+				displayOptions: {
+					show: { operation: ['uploadOriginPublicKey'] },
+				},
+				default: '',
+				required: true,
+				description: 'The origin ID returned by the Create Origin operation',
+			},
+			{
+				displayName: 'PEM Public Key',
+				name: 'pemKey',
+				type: 'string',
+				typeOptions: { rows: 6 },
+				displayOptions: {
+					show: { operation: ['uploadOriginPublicKey'] },
+				},
+				default: '',
+				required: true,
+				placeholder: '-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----',
+				description: 'EC public key in PEM format (must start with -----BEGIN)',
+			},
 		],
 	};
 
@@ -430,6 +467,47 @@ export class AgentGen implements INodeType {
 						'agentGenApi',
 						options,
 					)) as IDataObject;
+				}
+
+				// ── Create Origin ─────────────────────────────────────────────────────
+				else if (operation === 'createOrigin') {
+					const options: IHttpRequestOptions = {
+						method: 'POST' as IHttpRequestMethods,
+						url: `${BASE_URL}/v1/origin`,
+						json: true,
+					};
+
+					responseData = (await this.helpers.httpRequestWithAuthentication.call(
+						this,
+						'agentGenApi',
+						options,
+					)) as IDataObject;
+				}
+
+				// ── Upload Origin Public Key ───────────────────────────────────────────
+				else if (operation === 'uploadOriginPublicKey') {
+					const originId = this.getNodeParameter('originId', i) as string;
+					const pem = this.getNodeParameter('pemKey', i) as string;
+
+					const credentials = await this.getCredentials('agentGenApi');
+					const res = await fetch(`${BASE_URL}/v1/origin/${originId}/public-key`, {
+						method: 'POST',
+						headers: {
+							'X-API-Key': credentials.apiKey as string,
+							'Content-Type': 'text/plain',
+						},
+						body: pem,
+					});
+
+					const json = (await res.json()) as IDataObject;
+					if (!res.ok) {
+						throw new NodeOperationError(
+							this.getNode(),
+							(json.error as string) ?? `Upload failed with status ${res.status}`,
+							{ itemIndex: i },
+						);
+					}
+					responseData = json;
 				} else {
 					throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`, {
 						itemIndex: i,

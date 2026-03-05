@@ -56,6 +56,18 @@ class AgentGen {
                             description: 'Upload a file for use inside HTML templates. Free — auto-deleted after 24 hours.',
                             action: 'Upload a temporary file',
                         },
+                        {
+                            name: 'Create Origin',
+                            value: 'createOrigin',
+                            description: 'Provision a new public origin subdomain (<id>.agent-gen.com) for hosting files. Free.',
+                            action: 'Create a public origin subdomain',
+                        },
+                        {
+                            name: 'Upload Origin Public Key',
+                            value: 'uploadOriginPublicKey',
+                            description: 'Upload an EC public key (PEM) to an origin subdomain (e.g. for Tesla virtual key setup). Free.',
+                            action: 'Upload public key to origin',
+                        },
                     ],
                     default: 'generateImage',
                 },
@@ -261,11 +273,36 @@ class AgentGen {
                     placeholder: 'image.png',
                     description: 'Override the filename sent to the API. Defaults to the filename from the binary data.',
                 },
+                // ─── Upload Origin Public Key ────────────────────────────────────────────
+                {
+                    displayName: 'Origin ID',
+                    name: 'originId',
+                    type: 'string',
+                    displayOptions: {
+                        show: { operation: ['uploadOriginPublicKey'] },
+                    },
+                    default: '',
+                    required: true,
+                    description: 'The origin ID returned by the Create Origin operation',
+                },
+                {
+                    displayName: 'PEM Public Key',
+                    name: 'pemKey',
+                    type: 'string',
+                    typeOptions: { rows: 6 },
+                    displayOptions: {
+                        show: { operation: ['uploadOriginPublicKey'] },
+                    },
+                    default: '',
+                    required: true,
+                    placeholder: '-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----',
+                    description: 'EC public key in PEM format (must start with -----BEGIN)',
+                },
             ],
         };
     }
     async execute() {
-        var _a;
+        var _a, _b;
         const items = this.getInputData();
         const returnData = [];
         for (let i = 0; i < items.length; i++) {
@@ -377,6 +414,34 @@ class AgentGen {
                         json: true,
                     };
                     responseData = (await this.helpers.httpRequestWithAuthentication.call(this, 'agentGenApi', options));
+                }
+                // ── Create Origin ─────────────────────────────────────────────────────
+                else if (operation === 'createOrigin') {
+                    const options = {
+                        method: 'POST',
+                        url: `${BASE_URL}/v1/origin`,
+                        json: true,
+                    };
+                    responseData = (await this.helpers.httpRequestWithAuthentication.call(this, 'agentGenApi', options));
+                }
+                // ── Upload Origin Public Key ───────────────────────────────────────────
+                else if (operation === 'uploadOriginPublicKey') {
+                    const originId = this.getNodeParameter('originId', i);
+                    const pem = this.getNodeParameter('pemKey', i);
+                    const credentials = await this.getCredentials('agentGenApi');
+                    const res = await fetch(`${BASE_URL}/v1/origin/${originId}/public-key`, {
+                        method: 'POST',
+                        headers: {
+                            'X-API-Key': credentials.apiKey,
+                            'Content-Type': 'text/plain',
+                        },
+                        body: pem,
+                    });
+                    const json = (await res.json());
+                    if (!res.ok) {
+                        throw new n8n_workflow_1.NodeOperationError(this.getNode(), (_b = json.error) !== null && _b !== void 0 ? _b : `Upload failed with status ${res.status}`, { itemIndex: i });
+                    }
+                    responseData = json;
                 }
                 else {
                     throw new n8n_workflow_1.NodeOperationError(this.getNode(), `Unknown operation: ${operation}`, {
